@@ -2,7 +2,8 @@
 
 驗證使用者確認的規則：
 - 跟下單執行有關的失敗，都要在視窗/日誌寫出交易所回的具體原因
-- 交易員主動動作失敗 → 當場最多重試 5 次，每次間隔，第 5 次仍失敗提示手動操作
+- 交易員主動動作（移動止損／改單）失敗 → 當場最多重試 5 次，每次間隔
+- 全平（全部止盈／止損／已平倉／套保出場）→ 一次性動作，失敗只報原因不重試
 - 建倉失敗 → 只報原因，絕不重試、絕不補單
 - 建倉成功但保護單（SL / TP）沒掛上 → 補掛，最多 5 次
 - 重新開機不補做任何東西（本輪沒有任何開機重放路徑）
@@ -73,33 +74,34 @@ class TestExecutionFailureReporting(unittest.IsolatedAsyncioTestCase):
         path = self.tmp / "failed_actions.log"
         return path.read_text(encoding="utf-8") if path.exists() else ""
 
-    async def test_manual_close_failure_reports_reason_and_retries_until_success(self):
-        adapter = FailingAdapter(
-            fail_protection=2,
-            position={"symbol": "LITUSDT", "side": "long", "qty": 10.0},
-        )
-        router, notifier = self._router(adapter)
-        with self._no_wait() as sleep, self.assertLogs(level="INFO") as logs:
-            await router.on_event("216", "LITUSDT", "close")
-        text = "\n".join(logs.output)
-        self.assertIn(EXCHANGE_REASON, text)
-        self.assertIn("正在進行第 1 次嘗試", text)
-        self.assertIn("執行成功", text)
-        self.assertEqual(adapter.protection_attempts, 3)
-        self.assertEqual(sleep.await_count, 2)
-        self.assertEqual(sleep.await_args_list[0].args[0], 2.0)
-        self.assertTrue(any("全平" in s for s in notifier.sent), notifier.sent)
-
-    async def test_manual_close_five_failures_prompts_manual_operation(self):
+    async def test_manual_close_failure_is_one_shot_and_reports_reason(self):
+        # 規則 2026-11-09：全平是一次性動作，失敗也不重試，只把原因說清楚
         adapter = FailingAdapter(
             fail_protection=99,
             position={"symbol": "LITUSDT", "side": "long", "qty": 10.0},
         )
         router, notifier = self._router(adapter)
-        with self._no_wait(), self.assertLogs(level="ERROR") as logs:
+        with self._no_wait() as sleep, self.assertLogs(level="ERROR") as logs:
             await router.on_event("216", "LITUSDT", "close")
         text = "\n".join(logs.output)
-        self.assertEqual(adapter.protection_attempts, 5)
+        self.assertIn(EXCHANGE_REASON, text)
+        self.assertIn("請手動操作", text)
+        self.assertNotIn("正在進行第", text)
+        self.assertEqual(adapter.protection_attempts, 1)
+        self.assertEqual(sleep.await_count, 0)
+        self.assertTrue(any("請手動操作" in s for s in notifier.sent), notifier.sent)
+
+    async def test_hedge_exit_failure_is_one_shot_and_prompts_manual_operation(self):
+        adapter = FailingAdapter(
+            fail_protection=99,
+            position={"symbol": "LITUSDT", "side": "long", "qty": 10.0},
+        )
+        router, notifier = self._router(adapter)
+        with self._no_wait() as sleep, self.assertLogs(level="ERROR") as logs:
+            await router.on_event("216", "LITUSDT", "hedge_exit")
+        text = "\n".join(logs.output)
+        self.assertEqual(adapter.protection_attempts, 1)
+        self.assertEqual(sleep.await_count, 0)
         self.assertIn("請手動操作", text)
         self.assertIn(EXCHANGE_REASON, text)
         self.assertTrue(any("請手動操作" in s for s in notifier.sent), notifier.sent)

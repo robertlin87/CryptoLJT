@@ -151,9 +151,9 @@ class TriggerRouter:
                        mod_fields: dict | None = None, old_signal=None) -> None:
         """備份觸發：事件核對/指令（規則與使用者確認 2026-11-04）。
 
-        - close / hedge_exit：全平場景——平剩餘 + 撤該 symbol 掛單，失敗當場重試
-        - sl_hit / all_tp：結果通知，只清一次、不重試
-          （倉位通常已被交易所平掉，close_all 會撤殘留掛單）
+        - sl_hit / all_tp / close / hedge_exit：全平四條件，一次性動作
+          （訊號當下平掉該 symbol 全部頭寸與掛單，不重試、不事後補做；
+           之後開新倉與本次無關）。人為指令失敗額外提示手動處理
         - move_sl / hedge：amend SL 至 price（人為指令，雙通道任一出現即執行）
         - modify：跟隨分析師逐項修改（撤舊 TP 重掛新價、SL 變更 amend）
         - tp_hit：純信息（主觸發掛單已自動止盈，TP1-3 部分平倉不撤單）
@@ -167,36 +167,28 @@ class TriggerRouter:
             )
             return
 
-        if action_type in ("sl_hit", "all_tp"):
-            # 結果通知：只做一次清倉/撤單，不重試、不提示手動操作
+        if action_type in ("sl_hit", "all_tp", "close", "hedge_exit"):
+            # 全平是一次性動作（規則 2026-11-09）：訊號收到那一刻，把該 symbol
+            # 手上所有頭寸與掛單清一次，就這一次。不重試、不排待辦、不事後補做；
+            # 之後若開新倉，那是新倉自己的事，與本次訊號無關。
+            # 人為指令（已平倉／套保出場）失敗時額外提示手動處理；結果通知不提示。
+            is_manual = action_type in ("close", "hedge_exit")
             try:
                 closed = await self._om.close_all(symbol)
             except Exception as exc:  # noqa: BLE001 - 交易所錯誤需原樣回報
                 report_failure(
                     f"訂單{order_id} {symbol} {action_type} 清理失敗，"
                     f"原因：{describe_error(exc)}"
+                    + ("，請手動操作" if is_manual else "")
                 )
+                if is_manual:
+                    await self._notifier.send(
+                        f"⚠️ 訂單{order_id} {symbol} 全平失敗，請手動操作"
+                    )
                 return
             await self._notifier.send(
                 f"🟥 全平/撤單 {symbol}（{action_type}）"
                 f"{'已執行' if closed else '無持倉僅記錄'}"
-            )
-        elif action_type in ("close", "hedge_exit"):
-            state = {"closed": False}
-
-            async def _close_all():
-                state["closed"] = await self._om.close_all(symbol)
-
-            if not await run_with_retry(
-                _close_all, label=f"訂單{order_id} {symbol} 全平/撤單"
-            ):
-                await self._notifier.send(
-                    f"⚠️ 訂單{order_id} {symbol} 全平/撤單失敗，請手動操作"
-                )
-                return
-            await self._notifier.send(
-                f"🟥 全平/撤單 {symbol}（{action_type}）"
-                f"{'已執行' if state['closed'] else '無持倉僅記錄'}"
             )
         elif action_type in ("move_sl", "hedge") and price is not None:
             async def _amend_sl():

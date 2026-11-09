@@ -114,14 +114,16 @@ class OrderManager:
             log.info("已市價全平：%s（qty=%s）", symbol, pos["qty"])
             await self._adapter.cancel_all_for_symbol(symbol)
             return True
-        # 無持倉：清理殘留 reduce-only 掛單（全部止盈/止損後的殘留）
-        orders = await self._adapter.fetch_open_orders(symbol)
-        leftovers = [o for o in orders if o.get("reduce_only")]
-        if leftovers:
-            await self._adapter.cancel_all_for_symbol(symbol)
-            log.info("無持倉，已撤殘留掛單：%s（%s 個 reduce-only）", symbol, len(leftovers))
-        else:
-            log.info("無持倉無掛單，跳過：%s", symbol)
+        # 無持倉：收到全平信號就是終態，該 symbol 的掛單一律撤乾淨。
+        # 不再以「查得到殘留」當前提——條件單（獨立 SL/TP）可能不在查詢結果裡，
+        # 查詢端點失敗也會造成盲區；撤單本身冪等無害，查不到就跳過反而會漏。
+        try:
+            orders = await self._adapter.fetch_open_orders(symbol)
+        except Exception as exc:
+            log.warning("查詢 %s 掛單失敗，仍執行終態撤單：%s", symbol, exc)
+            orders = []
+        await self._adapter.cancel_all_for_symbol(symbol)
+        log.info("無持倉，已執行終態撤單：%s（查到 %s 個掛單）", symbol, len(orders))
         return False
 
     async def amend_sl(self, symbol: str, sl_price: float,

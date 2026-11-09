@@ -279,12 +279,15 @@ class TestCloseAllResidual(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(adapter.created[0]["reduce_only"], True)
         self.assertEqual(adapter.cancelled, ["LITUSDT"])
 
-    async def test_nothing_to_do(self):
+    async def test_terminal_cleanup_cancels_even_when_query_returns_nothing(self):
+        # 全平信號 = 終態：查不到掛單也要發撤單指令，不能因查詢盲區靜默跳過
+        # （條件單可能不在一般掛單查詢結果裡，見 GRASSUSDT 事故）
         adapter = StubAdapter(position=None, open_orders=[])
         om = OrderManager(adapter)
         closed = await om.close_all("LITUSDT")
-        self.assertFalse(closed)
-        self.assertEqual(adapter.cancelled, [])
+        self.assertFalse(closed)  # 無持倉可平
+        self.assertEqual(adapter.cancelled, ["LITUSDT"])
+        self.assertEqual(adapter.created, [])
 
 
 class TestWatchdog(unittest.IsolatedAsyncioTestCase):
