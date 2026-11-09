@@ -101,6 +101,8 @@ class TriggerRouter:
         # - 系統最低手數 = 交易所最低手數 × 實際掛檔數 n，保證每檔都能以交易所
         #   最低手數出場；n = min(報單檔數, 最後一個非 0 的比例檔位)，上限 4
         # - 算出的手數（已按精度向下取整）只要 < 系統最低手數，就按系統最低手數下單
+        # - 交易所沒給任何下限、風控算到 0 → 用精度步長當最低手數照樣按掛檔數下單
+        #   （使用者規則 2026-11-09：算到 0 不得整單跳過）
         # - 高於最高手數 → 按最高手數交易
         limits = market.get("limits", {})
         amount_limits = limits.get("amount") or {}
@@ -111,6 +113,16 @@ class TriggerRouter:
             qty = system_min
             log.info("低於系統最低手數：按交易所最低手數 x%d 下單 qty=%s（交易所最低=%s）",
                      n_tiers, qty, exchange_min)
+        elif qty <= 0 and amount_step and float(amount_step) > 0:
+            # 交易所連最低手數都沒回傳、風控又算到 0：依使用者規則 2026-11-09，
+            # 用手數精度步長（交易所的最小可下單位）當最低手數，按掛檔數下單，
+            # 算到 0 也不得整單跳過。
+            step = float(amount_step)
+            qty = round_down_qty(step * n_tiers, step)
+            log.warning(
+                "交易所未提供最低手數且風控算到 0：按精度步長 x%d 下單 qty=%s（步長=%s）",
+                n_tiers, qty, step,
+            )
         max_qty = amount_limits.get("max")
         if max_qty and qty > float(max_qty):
             qty = round_down_qty(float(max_qty), amount_step)

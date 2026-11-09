@@ -10,7 +10,7 @@ from autotrade.multiplier_prompt import (DEFAULT, prompt_multiplier,
 CFG = """\
 # 頂部註釋
 risk:
-  max_concurrent_positions: 3
+  margin_formula_tol_pct: 0.1
   order_multiplier: 1.0      # 保留這行註釋
 exchanges:
   active: bybit
@@ -44,7 +44,7 @@ class TestReadSave(_CfgMixin, unittest.TestCase):
             text = p.read_text(encoding="utf-8")
             self.assertIn("# 頂部註釋", text)
             self.assertIn("# 保留這行註釋", text)
-            self.assertIn("max_concurrent_positions: 3", text)
+            self.assertIn("margin_formula_tol_pct: 0.1", text)
             self.assertIn("active: bybit", text)
             self.assertEqual(read_multiplier(p), 0.2)
         finally:

@@ -97,32 +97,41 @@ class TestRiskValidate(unittest.TestCase):
         self.assertFalse(d.accepted)
         self.assertIn("反向", d.reason)
 
-    def test_concurrent_limit(self):
+    def test_no_concurrent_position_limit(self):
+        # 規則 2026-11-09 移除：同時持有多少幣種不再設上限。
+        # 連配置裡仍殘留 max_concurrent_positions 也不得再生效。
         positions = [
             {"symbol": "AUSDT", "side": "long"},
             {"symbol": "BUSDT", "side": "long"},
             {"symbol": "CUSDT", "side": "long"},
+            {"symbol": "DUSDT", "side": "long"},
+            {"symbol": "EUSDT", "side": "long"},
         ]
         d = validate(make_signal(), 1000.0, 1.0, open_positions=positions,
                      risk_cfg={"max_concurrent_positions": 3})
-        self.assertFalse(d.accepted)
-        self.assertIn("併發", d.reason)
+        self.assertTrue(d.accepted)
 
-    def test_margin_mismatch(self):
-        d = validate(make_signal(margin_pct=50.0), 1000.0, 1.0)
-        self.assertFalse(d.accepted)
-        self.assertIn("保證金", d.reason)
+    def test_margin_mismatch_only_warns_and_still_accepts(self):
+        # 報單數字對不上只提醒，不再把單子廢掉
+        with self.assertLogs("autotrade.risk.engine", level="WARNING") as logs:
+            d = validate(make_signal(margin_pct=50.0), 1000.0, 1.0)
+        self.assertTrue(d.accepted)
+        self.assertIn("保證金", "\n".join(logs.output))
 
-    def test_min_notional(self):
+    def test_small_notional_no_longer_rejected(self):
+        # 規則 2026-11-09 移除：不再由程式自訂名義值下限拒單；
+        # 交易所若不接受會自己回原因。連配置裡殘留 min_notional 也不得生效。
         d = validate(make_signal(), 100.0, 1.0, risk_cfg={"min_notional": 200.0})
-        self.assertFalse(d.accepted)
-        self.assertIn("名義值", d.reason)
+        self.assertTrue(d.accepted)
 
-    def test_daily_loss_limit(self):
-        d = validate(make_signal(), 1000.0, 1.0, daily_pnl=-60.0,
-                     risk_cfg={"daily_loss_pct": 5.0})
-        self.assertFalse(d.accepted)
-        self.assertIn("虧損", d.reason)
+    def test_daily_loss_cap_removed(self):
+        # 規則 2026-11-09 移除：單日虧損上限是從沒接線的空殼，整套清掉。
+        # 風控不再接受當日損益參數，配置裡殘留 daily_loss_pct 也不得生效。
+        import inspect
+        self.assertNotIn("daily_pnl", inspect.signature(validate).parameters)
+        d = validate(make_signal(), 1000.0, 1.0,
+                     risk_cfg={"daily_loss_pct": 0.0001})
+        self.assertTrue(d.accepted)
 
 
 class TestPositionTracker(unittest.TestCase):
@@ -407,9 +416,7 @@ class TestTriggerRouter(unittest.IsolatedAsyncioTestCase):
 
         notifier = RecordingNotifier()
         adapter = LowEquityStub()
-        # validate 的名義值下限（預設 5U）會拒掉 equity=4 的小單，這裡單獨放寬
-        router = TriggerRouter(adapter, OrderManager(adapter), notifier,
-                               risk_cfg={"min_notional": 0.5})
+        router = TriggerRouter(adapter, OrderManager(adapter), notifier)
         await router.on_signal(make_signal())
         self.assertAlmostEqual(adapter.created[0]["qty"], 1.644 * 4, delta=0.01)
 
@@ -563,6 +570,21 @@ class TestTriggerRouter(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(adapter.created[0]["qty"], 0.004)
         self.assertEqual([o["qty"] for o in adapter.created[1:]],
                          [0.001, 0.001, 0.001, 0.001])
+
+    async def test_zero_qty_still_orders_when_exchange_gives_no_min(self):
+        # 交易所連 amount.min / cost.min 都沒給時，算到 0 手也不能整單跳過：
+        # 以交易所的手數精度步長當最低手數，按實際掛檔數 x4 下單
+        adapter = StubAdapter()  # fetch_market 的 limits={}
+        notifier = RecordingNotifier()
+        router = TriggerRouter(adapter, OrderManager(adapter), notifier,
+                               risk_cfg={"order_multiplier": 0.01})
+        sig = make_signal(entry=100.0, sl=50.0)
+        await router.on_signal(sig)
+        self.assertTrue(adapter.created, notifier.sent)
+        self.assertEqual(adapter.created[0]["qty"], 0.004)
+        self.assertEqual([o["qty"] for o in adapter.created[1:]],
+                         [0.001, 0.001, 0.001, 0.001])
+        self.assertFalse(any("跳過" in s for s in notifier.sent), notifier.sent)
 
 
 if __name__ == "__main__":

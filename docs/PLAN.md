@@ -105,8 +105,8 @@ e:\VibeCoding\
 ### 風控引擎（risk/engine.py）
 
 - **張數 = floor(equity × R% ÷ |entry − stop| ÷ contractSize)**（使用者指定公式）；minNotional/最小下單量校驗
-- 保證金復算校驗：`|margin_pct − R%/(stop_dist_pct×leverage)| ≤ 0.1%`，超差 reject 通知；保證金% 上限同樣生效
-- 分析師白名單、同 symbol 反向信號 reject、併發持倉/日虧上限（設定）
+- 保證金復算：`|margin_pct − R%/(stop_dist_pct×leverage)| ≤ 0.1%`，超差只寫告警、照常下單（不攔單）
+- 分析師白名單、同 symbol 反向信號 reject；同時持有的幣種數不設上限、單日虧損上限均已移除
 
 ### 執行與狀態機（execution/）
 

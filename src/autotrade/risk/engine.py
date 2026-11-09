@@ -7,8 +7,11 @@ R% = 報單「控倉維持 x% 風控」的 x；合約倍數 = 各交易所每張
 """
 from __future__ import annotations
 
+import logging
 import math
 from dataclasses import dataclass
+
+log = logging.getLogger("autotrade.risk.engine")
 
 
 def calc_contract_qty(
@@ -32,10 +35,9 @@ def check_margin_formula(
     leverage: int,
     tol_pct: float = 0.1,
 ) -> bool:
-    """保證金復算校驗：margin_pct ≈ risk_pct / (stop_dist_pct × leverage)。
+    """保證金復算：margin_pct ≈ risk_pct / (stop_dist_pct × leverage)。
 
-    三條真實樣例均吻合（訂單216：7.61 ≈ 2.00/(2.63×10)=7.60）。超差說明
-    信號有誤或模板誤配，應 reject。
+    只用於判斷要不要寫一行提醒（規則 2026-11-09）；超差不攔單，照常下單。
     """
     if stop_dist_pct <= 0 or leverage <= 0:
         return False
@@ -57,17 +59,16 @@ def validate(
     open_positions: list | None = None,
     risk_cfg: dict | None = None,
     analysts_cfg: dict | None = None,
-    daily_pnl: float = 0.0,
 ) -> RiskDecision:
     """M2 風控校驗，返回 RiskDecision(accepted, reason, qty)。
 
     依次檢查：
       1. 分析師白名單（allow_all=false 時生效）
       2. 同 symbol 反向信號拒單
-      3. 併發持倉上限（按不同 symbol 數計）
-      4. 保證金復算校驗（複用 check_margin_formula）
-      5. 手數 = calc_contract_qty + minNotional（名義值下限）
-      6. 日虧上限（daily_pnl 負值超過閾值則拒）
+      3. 保證金復算：數字對不上只提醒、不攔單
+      4. 手數 = calc_contract_qty（名義值下限已移除）
+
+    同時持有多少幣種不設上限、單日虧損上限均已移除（規則 2026-11-09）。
 
     手數公式與保證金復算已實現並有測試，此處直接複用。
     open_positions 元素需含 symbol 與 side（"long"/"short"）。
@@ -87,33 +88,24 @@ def validate(
         if pos.get("symbol") == signal.symbol and pos.get("side") != signal.side:
             return RiskDecision(False, f"同 symbol 反向信號拒單：{signal.symbol}")
 
-    # 3) 併發持倉上限（按不同 symbol 數計）
-    max_pos = int(risk_cfg.get("max_concurrent_positions", 3))
-    held_symbols = {pos.get("symbol") for pos in open_positions}
-    if signal.symbol not in held_symbols and len(held_symbols) >= max_pos:
-        return RiskDecision(False, f"併發持倉達上限 {max_pos}")
-
-    # 4) 保證金復算校驗
+    # 3) 保證金復算：數字對不上只提醒，照常下單（規則 2026-11-09）
     tol = float(risk_cfg.get("margin_formula_tol_pct", 0.1))
     if not check_margin_formula(
         signal.margin_pct, signal.risk_pct, signal.stop_dist_pct, signal.leverage, tol
     ):
-        return RiskDecision(False, "保證金復算超差")
+        log.warning(
+            "報單 %s %s 保證金數字對不上（保證金 %s%%，風控行算出 %.4f%%，容差 %s%%），"
+            "僅提醒，照常下單",
+            signal.order_id, signal.symbol, signal.margin_pct,
+            (signal.risk_pct / (signal.stop_dist_pct * signal.leverage) * 100.0
+             if signal.stop_dist_pct > 0 and signal.leverage > 0 else float("nan")),
+            tol,
+        )
 
-    # 5) 手數 + minNotional
+    # 4) 手數（規則 2026-11-09：移除程式自訂的名義值下限，交易所自己會把關）
     qty = calc_contract_qty(equity, signal.risk_pct, signal.entry, signal.sl, contract_size)
-    # qty=0 不再在這裡拒單：按使用者規則「手數低於系統最低手數就按系統最低手數
+    # qty=0 不在這裡拒單：按使用者規則「手數低於系統最低手數就按系統最低手數
     # 下單」，0 也屬於低於，交給 TriggerRouter 的 system_min 託底。
     # 若交易所沒給任何下限（system_min 也是 0），執行層會跳過下單並告警。
-    if qty > 0:
-        min_notional = float(risk_cfg.get("min_notional", 5.0))
-        notional = qty * contract_size * signal.entry
-        if notional < min_notional:
-            return RiskDecision(False, f"名義值過小：{notional:.2f} < {min_notional}")
-
-    # 6) 日虧上限
-    daily_loss_pct = float(risk_cfg.get("daily_loss_pct", 5.0))
-    if daily_pnl < 0 and abs(daily_pnl) >= equity * daily_loss_pct / 100.0:
-        return RiskDecision(False, "當日虧損已達上限")
 
     return RiskDecision(True, "", qty)

@@ -42,10 +42,8 @@ exchanges:
     secret: ""
 
 risk:
-  max_concurrent_positions: 3
-  daily_loss_pct: 5.0                # 單日虧損上限（佔總權益）
   max_slippage_pct: 0.3              # 市價補單滑點閾值
-  margin_formula_tol_pct: 0.1        # 保證金復算校驗容差
+  margin_formula_tol_pct: 0.1        # 保證金數字對不上的提醒容差（僅提醒，不攔單）
   tp_ratios: [25, 25, 25, 25]         # 止盈部位比例（%，四檔加總 100、可填 0=該檔不掛單）：最後一個非 0 的檔位全出剩餘；報單多出的檔位不掛
   order_multiplier: 1.0              # 下單倍數：只能是大於 0 的數字（整數或小數）；手數由公式算出並按交易所精度向下取整
   watchdog_interval_sec: 30          # 看護輪詢間隔：全平後清理交易所殘留掛單
