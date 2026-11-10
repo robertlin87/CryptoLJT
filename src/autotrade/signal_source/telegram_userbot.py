@@ -16,7 +16,7 @@ from datetime import datetime
 
 from telethon import TelegramClient, events
 
-from ..constants import GROUP_CHAT_ID, GROUP_CHAT_TITLE
+from ..constants import GROUP_CHAT_ID, GROUP_CHAT_TITLE, GROUP_NOT_JOINED_MSG
 from ..proxy import resolve_proxy
 from .base import MessageHandler, RawMessage, SignalSource
 
@@ -163,7 +163,7 @@ class TelegramUserbotSource(SignalSource):
             try:
                 target = await self._resolve_chat()
             except (ChannelPrivateError, UserNotParticipantError):
-                return False, f"你的帳號未加入「{GROUP_CHAT_TITLE}」——請先加入該群（被移出群后軟件將失效）"
+                return False, GROUP_NOT_JOINED_MSG
             except Exception as e:  # noqa: BLE001
                 return False, f"無法訪問信號群：{e}"
             self._check_group_privacy(target)
@@ -215,9 +215,7 @@ class TelegramUserbotSource(SignalSource):
             async for d in self._client.iter_dialogs():
                 if d.name == self._chat_title:
                     return d.entity
-        raise RuntimeError(
-            f"無法訪問信號群「{GROUP_CHAT_TITLE}」：請確認已加入該群（被移出群后軟件即失效）"
-        )
+        raise RuntimeError(GROUP_NOT_JOINED_MSG)
 
     def _check_group_privacy(self, target) -> None:
         # 私密群前提：公開群被踢後仍可輪詢歷史，群資格授權會被繞過

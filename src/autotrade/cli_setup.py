@@ -191,7 +191,7 @@ def _setup_telegram() -> tuple[int, str]:
         print(f"  {msg}")
         if ok:
             return api_id, api_hash
-        print("  登入失敗，請重新輸入 api_id / api_hash。")
+        print("  驗群未通過：請先加入「加密林教頭 VIP 社群」後再重試（無須重新填寫 api_id / api_hash）。")
 
 
 def _setup_exchange() -> tuple[str, dict]:

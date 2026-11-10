@@ -9,4 +9,11 @@ chat_title/chat_id。
 GROUP_CHAT_ID = -1003875376369
 GROUP_CHAT_TITLE = "加密林教頭 VIP群"
 
+# 未加入信號群（私密群無權訪問）時顯示的提示；同時作為使用授權閘門。
+GROUP_NOT_JOINED_MSG = (
+    "你現在還沒有加入 加密林教頭 VIP 社群，無法收到報單訊息！"
+    "請加入免費的 Telegram 頻道了解如何成為 VIP："
+    "https://t.me/+aC9GoBeIdvU5YzFl"
+)
+
 VERSION = "1.0"

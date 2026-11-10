@@ -587,5 +587,34 @@ class TestTriggerRouter(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(any("跳過" in s for s in notifier.sent), notifier.sent)
 
 
+class TestGroupLockMessage(unittest.TestCase):
+    """未加入信號群時，check_group_access 必須回傳統一的 VIP 引導文案。"""
+
+    def test_not_joined_returns_vip_invite_message(self):
+        import asyncio
+        from unittest.mock import patch, AsyncMock, MagicMock
+        from autotrade.signal_source import telegram_userbot as tub
+        from autotrade.constants import GROUP_NOT_JOINED_MSG
+        from telethon.errors import ChannelPrivateError
+
+        # 連 TelegramClient 也 mock 掉，避免 Telethon 建立真實 SQLite 會話；
+        # start/disconnect 與 _resolve_chat 全 mock，不觸網、不依賴真實 TG。
+        fake_client = MagicMock()
+        fake_client.start = AsyncMock()
+        fake_client.disconnect = AsyncMock()
+        with patch.object(tub, "TelegramClient", return_value=fake_client):
+            src = tub.TelegramUserbotSource(
+                handler=lambda raw: None, api_id=123, api_hash="x",
+                session_name="anything", proxy=None,
+            )
+        src._resolve_chat = AsyncMock(side_effect=ChannelPrivateError("no access"))
+
+        ok, msg = asyncio.run(src.check_group_access())
+        self.assertFalse(ok)
+        self.assertEqual(msg, GROUP_NOT_JOINED_MSG)
+        self.assertIn("加密林教頭 VIP 社群", msg)
+        self.assertIn("https://t.me/+aC9GoBeIdvU5YzFl", msg)
+
+
 if __name__ == "__main__":
     unittest.main()
