@@ -2,7 +2,7 @@
 # 类型规则（与用户确认 2026-11-04）：
 #   - hedge（套保）/ close（已平倉）= 分析师人为操作指令，要跟着做
 #   - tp_hit / all_tp = 纯信息（交易所挂单已自动止盈），仅记录；全平后撤残留挂单由
-#     TriggerRouter 的 close_all 与 Watchdog 轮询负责（TP1-3 部分平仓不撤单）
+#     TriggerRouter 的 close_all 负责（TP1-3 部分平仓不撤单）；不再有定时自动巡检
 # 消息可能带或不带 📌 前缀；已平倉后可跟分析师看法文字（模板用 search 不锚定行尾）。
 
 templates:

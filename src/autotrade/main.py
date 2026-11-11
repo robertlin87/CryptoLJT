@@ -7,7 +7,6 @@ dry_run=true 時用 NoopAdapter（全鏈路不碰交易所），只記錄通知�
 """
 from __future__ import annotations
 
-import asyncio
 import logging
 from pathlib import Path
 
@@ -18,7 +17,6 @@ from .exchange.noop import NoopAdapter
 from .execution.failure import describe_error, report_failure
 from .execution.order_manager import OrderManager
 from .execution.trigger_router import TriggerRouter
-from .execution.watchdog import Watchdog
 from .logfile import install_file_logging
 from .notify.notifier import Notifier
 from .parser.entry_parser import EntryParser
@@ -228,15 +226,6 @@ async def run(config_path: str | None = None) -> None:
 
     pipeline = MessagePipeline(db, notifier, router)
 
-    # 看護輪詢（無狀態，交易所為唯一事實源）：止損/末檔 TP 全平後清理殘留掛單
-    watchdog_task = None
-    if not cfg.dry_run:
-        watchdog = Watchdog(
-            adapter, notifier,
-            interval=float(cfg.risk.get("watchdog_interval_sec", 30.0)),
-        )
-        watchdog_task = asyncio.create_task(watchdog.run())
-
     tg = cfg.telegram
     # 信號群由 constants 鎖定（開發者固定），忽略設定檔案裡的 chat_title/chat_id
     source = TelegramUserbotSource(
@@ -249,7 +238,4 @@ async def run(config_path: str | None = None) -> None:
     try:
         await source.start()
     finally:
-        if watchdog_task:
-            watchdog_task.cancel()
-            await asyncio.gather(watchdog_task, return_exceptions=True)
         await db.close()

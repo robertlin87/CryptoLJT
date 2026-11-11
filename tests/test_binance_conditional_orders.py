@@ -8,9 +8,7 @@ import unittest
 from unittest.mock import MagicMock
 
 from autotrade.execution.order_manager import OrderManager
-from autotrade.execution.watchdog import Watchdog
 from autotrade.exchange.binance import BinanceAdapter
-from tests.test_execution import RecordingNotifier
 
 
 def _ccxt_symbol(symbol: str) -> str:
@@ -106,20 +104,13 @@ class TestConditionalOrderVisibility(unittest.IsolatedAsyncioTestCase):
 
 
 class TestTerminalCleanupSeesConditionalOrders(unittest.IsolatedAsyncioTestCase):
-    """查詢修好後，全平收尾、移動止損、30 秒巡邏都要能清掉條件單。"""
+    """查詢修好後，TG 全平訊號觸發的收尾、移動止損都要能清掉條件單。"""
 
     async def test_close_all_cancels_when_only_conditional_sl_remains(self):
         a, calls = _fake_adapter(regular=[], conditional=[_conditional_sl()])
         closed = await OrderManager(a).close_all("GRASSUSDT")
         self.assertFalse(closed)  # 無持倉可平
         self.assertEqual(len(calls["cancel_all"]), 2)
-
-    async def test_watchdog_cleans_conditional_sl_after_position_closed(self):
-        a, calls = _fake_adapter(regular=[], conditional=[_conditional_sl()])
-        notifier = RecordingNotifier()
-        await Watchdog(a, notifier).tick()
-        self.assertEqual(len(calls["cancel_all"]), 2)
-        self.assertTrue(any("殘留掛單" in s for s in notifier.sent), notifier.sent)
 
     async def test_amend_sl_cancels_old_conditional_sl_with_stop_param(self):
         pos = [{"symbol": _ccxt_symbol("GRASSUSDT"), "side": "short",

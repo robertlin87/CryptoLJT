@@ -69,7 +69,7 @@ src/autotrade/
 ├── parser/           # 報單/通知/操作行解析器
 ├── risk/             # 風控、手數公式、精度
 ├── exchange/         # 六家交易所適配 + schemas.py（嚮導動態表單）
-├── execution/        # OrderManager、TriggerRouter、Watchdog
+├── execution/        # OrderManager、TriggerRouter
 ├── storage/          # SQLite（信號/事件冪等層）
 └── signal_source/    # Telethon userbot
 ```

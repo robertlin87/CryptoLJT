@@ -1,4 +1,4 @@
-"""M2 執行層單測：風控 validate、PositionTracker、OrderManager、TriggerRouter、Watchdog。"""
+"""M2 執行層單測：風控 validate、PositionTracker、OrderManager、TriggerRouter。"""
 import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
@@ -7,7 +7,6 @@ from autotrade.exchange.noop import NoopAdapter
 from autotrade.execution.order_manager import OrderManager
 from autotrade.execution.position_tracker import PositionTracker, PositionState
 from autotrade.execution.trigger_router import TriggerRouter
-from autotrade.execution.watchdog import Watchdog
 from autotrade.notify.notifier import Notifier
 from autotrade.parser.entry_parser import Signal
 from autotrade.risk.engine import validate
@@ -297,57 +296,6 @@ class TestCloseAllResidual(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(closed)  # 無持倉可平
         self.assertEqual(adapter.cancelled, ["LITUSDT"])
         self.assertEqual(adapter.created, [])
-
-
-class TestWatchdog(unittest.IsolatedAsyncioTestCase):
-    """看護輪詢（無狀態）：無持倉 + reduce-only 殘留 → 撤；部分止盈/進場掛單不動。"""
-
-    def _setup(self, adapter):
-        notifier = RecordingNotifier()
-        return Watchdog(adapter, notifier), notifier
-
-    async def test_full_close_residual_cancelled(self):
-        adapter = StubAdapter(
-            positions=[],
-            open_orders=[{"id": "tp3", "symbol": "LITUSDT", "reduce_only": True}],
-        )
-        wd, notifier = self._setup(adapter)
-        await wd.tick()
-        self.assertEqual(adapter.cancelled, ["LITUSDT"])
-        self.assertTrue(any("殘留掛單" in s for s in notifier.sent), notifier.sent)
-
-    async def test_position_alive_keeps_orders(self):
-        # 持倉還在（部分止盈狀態）：同 symbol 的 reduce-only 掛單不撤
-        adapter = StubAdapter(
-            positions=[{"symbol": "LITUSDT", "side": "long", "qty": 6.0}],
-            open_orders=[{"id": "tp3", "symbol": "LITUSDT", "reduce_only": True}],
-        )
-        wd, _ = self._setup(adapter)
-        await wd.tick()
-        self.assertEqual(adapter.cancelled, [])
-
-    async def test_pending_entry_kept(self):
-        # 無持倉 + 只有非 reduce-only 掛單 = 進場限價單還在等，不撤
-        adapter = StubAdapter(
-            positions=[],
-            open_orders=[{"id": "entry", "symbol": "LITUSDT", "reduce_only": False}],
-        )
-        wd, _ = self._setup(adapter)
-        await wd.tick()
-        self.assertEqual(adapter.cancelled, [])
-
-    async def test_other_symbol_residual(self):
-        # A 幣有持倉、B 幣殘留掛單：只撤 B
-        adapter = StubAdapter(
-            positions=[{"symbol": "AUSDT", "side": "long", "qty": 1.0}],
-            open_orders=[
-                {"id": "tp_a", "symbol": "AUSDT", "reduce_only": True},
-                {"id": "tp_b", "symbol": "BUSDT", "reduce_only": True},
-            ],
-        )
-        wd, _ = self._setup(adapter)
-        await wd.tick()
-        self.assertEqual(adapter.cancelled, ["BUSDT"])
 
 
 class TestTriggerRouter(unittest.IsolatedAsyncioTestCase):
