@@ -28,9 +28,8 @@ templates:
   - name: modify
     action_type: modify
     regex: '✏️\s*訂單修改'
-  - name: manual_close_fallback
-    action_type: close
-    regex: '(?:^|\s)平倉(?:$|\s|（)'
+  # 不設「平倉」二字兜底：只有明確出現「🟥 已平倉」才算全平指令。
+  # 註解文字（如「減倉 50%（剩餘 50%）」）若改寫成「平倉」也不得觸發撤單。
   - name: comment
     action_type: ignore
     regex: '^💬'

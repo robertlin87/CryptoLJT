@@ -263,6 +263,23 @@ class TestOpParser(unittest.TestCase):
         self.assertEqual(ops[0].action_type, "unknown")
         self.assertEqual(ops[0].ts_text, "2026-11-01 00:00:00")
 
+    def test_plain_close_word_not_treated_as_terminal_close(self):
+        # 「減倉 50%（剩餘 50%）」这類講解若寫成「平倉」二字，也不可觸發全平
+        text = ("━━━ 操作記錄 ━━━\n"
+                "  → 🎯 TP1 達成 ➜ 0.01352\n"
+                "  → 平倉 50%（剩餘 50%）")
+        ops = self.parser.extract_ops(text)
+        self.assertNotIn("close", [o.action_type for o in ops])
+        self.assertEqual([o.action_type for o in ops],
+                         ["tp_hit", "unknown"])
+
+    def test_explicit_red_close_marker_still_terminal_close(self):
+        # 明確的「🟥 已平倉」仍須觸發全平（不可連這條一起拿掉）
+        ops = self.parser.extract_ops(
+            "━━━ 操作記錄 ━━━\n  → 🟥 已平倉  (2026-11-01 00:00:00)"
+        )
+        self.assertEqual([o.action_type for o in ops], ["close"])
+
     def test_hash_semantic_normalization(self):
         # 同一操作跨通道归一：编辑行与通知消息的 close 事件同键
         self.assertEqual(op_line_hash("close", None, None),
