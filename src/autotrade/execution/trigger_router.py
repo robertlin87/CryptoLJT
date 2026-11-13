@@ -14,8 +14,10 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import replace
 
 from ..config import DEFAULT_TP_RATIOS, parse_multiplier, parse_tp_ratios
+from ..exchange.symbol_aliases import resolve_symbol
 from ..risk.engine import validate
 from ..risk.precision import exchange_min_qty, last_positive_tier, round_down_qty
 from .failure import describe_error, report_failure, run_with_retry
@@ -39,6 +41,12 @@ class TriggerRouter:
         建倉失敗不重試、不補單，重新開機也不補做。
         """
         try:
+            # 報單幣種可能在該交易所叫另一個名字（如 PLAY / PLAYSOUT）：
+            # 查不到原名時改用別名，讓風控、下單、通知都用同一個正確幣種。
+            # 資料庫仍存報單原文（見 _log_signal），此處只置換本次動作物件。
+            resolved = await resolve_symbol(self._adapter, signal.symbol)
+            if resolved != signal.symbol:
+                signal = replace(signal, symbol=resolved)
             await self._on_signal_impl(signal)
         except Exception as exc:  # noqa: BLE001 - 交易所錯誤種類繁多，需原樣回報
             reason = describe_error(exc)
@@ -178,6 +186,14 @@ class TriggerRouter:
                 f"⚠️ 訂單{order_id} {action_type} 未執行：認不出是哪個幣，請手動處理"
             )
             return
+
+        # 與進場共用同一套別名解析：報單用 PLAY 開倉時，全平／改單／撤單
+        # 也要指向同一個交易所幣種。解析遇網路等錯誤時沿用原名，
+        # 讓既有的動作錯誤處理接手，不在這裡新增失敗點。
+        try:
+            symbol = await resolve_symbol(self._adapter, symbol)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("幣種別名解析失敗，沿用原名 %s：%s", symbol, exc)
 
         if action_type in ("sl_hit", "all_tp", "close", "hedge_exit"):
             # 全平是一次性動作（規則 2026-11-09）：訊號收到那一刻，把該 symbol
