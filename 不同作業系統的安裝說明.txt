@@ -1,0 +1,55 @@
+1. 桌面版系統（Windows、Linux 桌面版、Mac）
+
+請先執行與作業系統相對應的安裝檔，檔案名 install。
+設定完成後，再開啟 start_run 檔案，保持程式執行即可。
+
+Windows：點選 .bat 檔案。
+Linux 桌面版：點選 .sh 檔案。
+Mac 電腦：點選 .command 檔案。
+
+注意：如果 Linux 桌面版或 Mac 電腦無法正常開啟檔案，請以滑鼠右鍵點選檔案，再選擇「開啟」。
+
+2. Linux 命令列主機
+
+您可以向 AI 詢問對應的操作指令，也可以參考以下網站右上角「配置教程」：
+
+cryptoljt.com
+
+------------------------------------------
+
+
+1. 桌面版系统（Windows、Linux 桌面版、苹果电脑）：
+
+请直接双击 install，配置好之后再打开 start_run 放着让它跑就可以。
+
+具体点击文件如下：
+(a) Windows：请点击 .bat 文件
+(b) Linux 桌面版：请点击 .sh 文件
+(c) 苹果电脑：请点击 .command 文件
+
+注意：如果 Linux 桌面版和苹果电脑无法正常打开，请右键点击文件，再选择“打开”即可。
+
+2. Linux 命令行系列主机：
+
+可以向 AI 询问对应的操作命令，或者参考以下网址右上角“配置教程”: 
+
+cryptoljt.com
+
+------------------------------------------
+
+1. Desktop systems (Windows, Linux desktop, and Mac):
+
+Double-click install. 
+After the configuration is complete, open start_run and leave it running.
+
+Click the following files:
+
+(a) Windows: Click the .bat file.
+(b) Linux desktop: Click the .sh file.
+(c) Mac: Click the .command file.
+
+Note: If the file does not open properly on Linux desktop or Mac, right-click it and select "Open."
+
+2. Linux command-line hosts:
+
+You can ask an AI for the appropriate commands, or visit: http://cryptoljt.com/
