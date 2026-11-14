@@ -196,7 +196,7 @@ class TelegramUserbotSource(SignalSource):
         self._target = await self._resolve_chat()
         self._check_group_privacy(self._target)
         self._register_handlers()
-        log.info("開始監聽群「%s」，Ctrl+C 退出", getattr(self._target, "title", self._target))
+        log.info("開始監聽群「%s」，關閉視窗即停止", getattr(self._target, "title", self._target))
         await self._client.run_until_disconnected()
 
     async def stop(self) -> None:
