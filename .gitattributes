@@ -1,0 +1,7 @@
+# 換行符規範：不同系統的腳本需要各自的換行格式，否則會出問題——
+# Windows cmd 讀到 LF 會「指令斷行」，bash 讀到 CRLF 會報 bad interpreter。
+# - *.bat：一律用 Windows 的 CRLF（原樣存入倉庫，GitHub 下載即為 CRLF）
+# - *.sh / *.command：一律用 Unix 的 LF
+*.bat -text
+*.sh text eol=lf
+*.command text eol=lf

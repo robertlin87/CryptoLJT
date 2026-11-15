@@ -30,8 +30,18 @@ if [ ! -d ".venv" ]; then
 fi
 echo "  完成"
 echo
-echo "[3/3] 安裝相依套件（可能需要幾分鐘）..."
-".venv/bin/python" -m pip install -e . --quiet
+echo "[3/3] 安裝相依套件（首次可能需要幾分鐘）..."
+if ! ".venv/bin/python" -m pip install -e .; then
+    echo "  第一次安裝失敗，改用相容的相依套件版本重試..."
+    echo "  （這是為了解決較新 Python 上某些套件尚未提供預編譯版本的問題）"
+    if ! ".venv/bin/python" -m pip install -e . "ccxt<4.5.65"; then
+        echo "  [錯誤] 相依套件安裝失敗，請往上查看錯誤訊息。"
+        echo "  常見原因：網路不通、防火牆擋住 pypi.org，"
+        echo "  或某些套件尚未支援你安裝的 Python 版本。"
+        read -rp "  按 Enter 結束..." _
+        exit 1
+    fi
+fi
 echo "  完成"
 echo
 echo "完成。啟動 CryptoLJT..."
