@@ -4,6 +4,11 @@
 ops_header: '━━━\s*操作記錄\s*━━━'   # 段分隔线，其后为操作行
 
 templates:
+  # 全部出場/全部離場 = 全平指令（新增 2026-11-17）。操作行认结尾「箭头 → 全部出場/全部離場」，
+  # 箭头兼容全角 → ／ ➜ 与半角 -> ／ -->。必须排在 tp_hit 之前，避免「TP 達成」先命中截走。
+  - name: close_all_exit
+    action_type: close
+    regex: '(?:-->|->|→|➜)\s*(?:全部離場|全部出場)'
   - name: tp_hit
     action_type: tp_hit
     regex: '🎯\s*TP(?P<tp_index>\d+)\s*達成\s*➜\s*(?P<price>[\d.,]+)'

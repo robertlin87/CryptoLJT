@@ -6,6 +6,12 @@
 # 消息可能带或不带 📌 前缀；已平倉后可跟分析师看法文字（模板用 search 不锚定行尾）。
 
 templates:
+  # 全部出場/全部離場 = 全平指令（新增 2026-11-17）。中间内容多变（減倉／TP 達成等）不写死，
+  # 只认「📌訂單+訂單號+幣種+方向」开头 + 结尾「箭头 → 全部出場/全部離場」；
+  # 箭头兼容全角 → ／ ➜ 与半角 -> ／ -->。必须排在 tp_hit 之前，避免被「TP 達成」截走。
+  - name: close_all_exit
+    action_type: close
+    regex: '(?:📌\s*)?訂單\s*(?P<order_id>\d+)\s+(?P<symbol>[A-Z0-9]+)USDT\s*(?P<side>做多|做空)[\s\S]*?(?:-->|->|→|➜)\s*(?:全部離場|全部出場)'
   - name: manual_close
     action_type: close
     regex: '(?:📌\s*)?訂單\s*(?P<order_id>\d+)\s+(?P<symbol>[A-Z0-9]+)USDT\s*(?P<side>做多|做空)\s*🟥\s*已平倉'

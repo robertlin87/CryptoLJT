@@ -143,6 +143,21 @@ class TestNoticeParser(unittest.TestCase):
         self._check("📌訂單 352 NEARUSDT 做多 ❌ 止損 ➜ 4.91",
                     ("352", "NEARUSDT", "long", "sl_hit", None, 4.91))
 
+    def test_close_all_exit_reduce(self):
+        # 新增（2026-11-17）：減倉到「全部出場」= 全平，中间内容放宽不识别
+        self._check("📌訂單 375 EVAAUSDT 做多 📉 減倉 50% → 全部出場",
+                    ("375", "EVAAUSDT", "long", "close", None, None))
+
+    def test_close_all_exit_tp4(self):
+        # 新增（2026-11-17）：TP4 達成後「全部離場」= 全平；必須優先於 tp_hit 匹配
+        self._check("📌訂單 235 WLFIUSDT 做空 🎯 TP4 達成 ➜ 0.04551 → 全部離場",
+                    ("235", "WLFIUSDT", "short", "close", None, None))
+
+    def test_close_all_exit_halfwidth_arrow(self):
+        # 新增（2026-11-17）：箭头可能是半角 ASCII「->」，也要识别为全平
+        self._check("📌訂單 375 EVAAUSDT 做多 📉 減倉 50% -> 全部出場",
+                    ("375", "EVAAUSDT", "long", "close", None, None))
+
     def test_modify_compact(self):
         # 用户样例（2026-11-04）：訂單修改指令 → 跟随逐项修改
         text = ("📌訂單 339 STARUSDT 做多 ✏️ 訂單修改 (2026-10-05 12:00:21) · "
@@ -212,6 +227,28 @@ class TestOpParser(unittest.TestCase):
         )
         self.assertEqual(ops[0].action_type, "sl_hit")
         self.assertEqual(ops[0].price, 4.91)
+
+    def test_close_all_exit_op_line_reduce(self):
+        # 新增（2026-11-17）：操作記錄行「減倉 → 全部出場」= 全平
+        ops = self.parser.extract_ops(
+            "━━━ 操作記錄 ━━━\n  → 📉 減倉 50% → 全部出場  (2026-11-14 14:19:38)"
+        )
+        self.assertEqual([o.action_type for o in ops], ["close"])
+
+    def test_close_all_exit_op_line_tp4(self):
+        # 新增（2026-11-17）：TP4 達成後「全部離場」必須判為全平，不能被 tp_hit 截走
+        ops = self.parser.extract_ops(
+            "━━━ 操作記錄 ━━━\n  → 🎯 TP4 達成 ➜ 0.04551 → 全部離場  (2026-11-16 23:16:25)"
+        )
+        self.assertEqual([o.action_type for o in ops], ["close"])
+
+    def test_plain_exit_word_without_header_not_close(self):
+        # 新增（2026-11-17）：没有「📌訂單+订单号+币种+方向」开头、只写「全部出場」
+        # 的假消息，绝不触发全平（编辑通道没有 header 约束，靠开头箭头/文案兜底）
+        ops = self.parser.extract_ops(
+            "━━━ 操作記錄 ━━━\n  → 随便写一句 全部出場  (2026-11-14 14:19:38)"
+        )
+        self.assertNotIn("close", [o.action_type for o in ops])
 
     def test_modify_block(self):
         # 用户样例（2026-11-04）：编辑通道的多行修改块，后续行无 → 前缀
